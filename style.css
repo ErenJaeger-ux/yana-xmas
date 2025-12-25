@@ -14,13 +14,13 @@ canvas#game {
   width: 100vw;
   height: 100vh;
   touch-action: none;
-  pointer-events: none; /* ✅ ВАЖНО: не перехватывать клики по UI */
 }
 
 #ui {
   position: fixed;
   inset: 0;
-  pointer-events: none;
+  /* ВАЖНО: UI должен кликается */
+  pointer-events: auto;
 }
 
 .screen {
@@ -32,12 +32,17 @@ canvas#game {
   padding: 24px;
   text-align: center;
   background: rgba(0,0,0,0.45);
-  pointer-events: auto;
 }
 
 .screen h1, .screen h2 { margin: 0; }
 .screen p { margin: 0; opacity: 0.95; }
 .hint { font-size: 1.15rem; }
+
+.note {
+  opacity: 0.8;
+  font-size: 0.95rem;
+  max-width: 520px;
+}
 
 button {
   border: 0;
@@ -47,7 +52,12 @@ button {
   cursor: pointer;
 }
 
-.row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
 .hud {
   position: absolute;
@@ -58,6 +68,7 @@ button {
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(0,0,0,0.35);
+  /* HUD клики не должен перехватывать */
   pointer-events: none;
 }
 
