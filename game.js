@@ -12,20 +12,20 @@
     tg?.initDataUnsafe?.start_param ||
     "default";
 
-  // UI элементы
-  const screenStart = document.getElementById("screen-start");
-  const screenWin = document.getElementById("screen-win");
-  const screenLose = document.getElementById("screen-lose");
+  // UI элементы (используем ID из index.html)
+  const screenStart = document.getElementById("startScreen");
+  const screenWin = document.getElementById("winScreen");
+  const screenLose = document.getElementById("loseScreen");
 
-  const winText = document.getElementById("win-text");
+  const winText = document.getElementById("winText");
   const scoreEl = document.getElementById("score");
   const livesEl = document.getElementById("lives");
 
-  const btnStart = document.getElementById("btn-start");
-  const btnAgainWin = document.getElementById("btn-again-win");
-  const btnAgainLose = document.getElementById("btn-again-lose");
-  const btnClose = document.getElementById("btn-close");
-  const btnClose2 = document.getElementById("btn-close-2");
+  const btnStart = document.getElementById("startBtn");
+  const btnAgainWin = document.getElementById("playAgainBtnWin");
+  const btnAgainLose = document.getElementById("playAgainBtnLose");
+  const btnClose = document.getElementById("closeBtnWin");
+  const btnClose2 = document.getElementById("closeBtnLose");
 
   btnClose.addEventListener("click", () => tg?.close?.());
   btnClose2.addEventListener("click", () => tg?.close?.());
@@ -63,48 +63,39 @@
     y: window.innerHeight - 120,
     w: 52,
     h: 52,
-    speed: 520, // скорость по клаве
+    speed: 520, // скорость по клавиатуре
   };
 
   // Картинка "Дед Мороз" (emoji)
-  // Для надёжности рисуем текстом
   const santaEmoji = "🎅";
 
   // --- Управление ---
-  // На телефоне: веди пальцем по экрану влево/вправо (можно просто водить)
-  // На ПК: веди мышкой/тачпадом
-  // Стрелки ◀ ▶ тоже работают
   function setPlayerX(clientX) {
     player.x = clientX - player.w / 2;
     player.x = Math.max(8, Math.min(window.innerWidth - player.w - 8, player.x));
   }
 
   let activePointerId = null;
+  let mouseDown = false;
 
-  window.addEventListener(
-    "pointerdown",
-    (e) => {
-      activePointerId = e.pointerId;
-      try {
-        e.target.setPointerCapture?.(e.pointerId);
-      } catch (_) {}
+  // Для тач-устройств и стилусов
+  window.addEventListener("pointerdown", (e) => {
+    console.log("Pointer down at:", e.clientX, e.clientY);
+    activePointerId = e.pointerId;
+    try {
+      e.target.setPointerCapture?.(e.pointerId);
+    } catch (_) {}
+    setPlayerX(e.clientX);
+    e.preventDefault?.();
+  }, { passive: false });
+
+  window.addEventListener("pointermove", (e) => {
+    // Двигаем даже если просто водишь пальцем/мышкой
+    if (activePointerId === null || e.pointerId === activePointerId) {
       setPlayerX(e.clientX);
-      e.preventDefault?.();
-    },
-    { passive: false }
-  );
-
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      // Двигаем даже если просто водишь пальцем/мышкой
-      if (activePointerId === null || e.pointerId === activePointerId) {
-        setPlayerX(e.clientX);
-      }
-      e.preventDefault?.();
-    },
-    { passive: false }
-  );
+    }
+    e.preventDefault?.();
+  }, { passive: false });
 
   window.addEventListener("pointerup", (e) => {
     if (e.pointerId === activePointerId) activePointerId = null;
@@ -113,12 +104,31 @@
     activePointerId = null;
   });
 
+  // Для мыши на ПК (дополнительно)
+  window.addEventListener("mousedown", (e) => {
+    console.log("Mouse down at:", e.clientX, e.clientY);
+    mouseDown = true;
+    setPlayerX(e.clientX);
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (mouseDown) {
+      setPlayerX(e.clientX);
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    mouseDown = false;
+  });
+
   // Клавиатура
   let keyDir = 0; // -1 left, +1 right
   window.addEventListener("keydown", (e) => {
+    console.log("Key pressed:", e.key);
     if (e.key === "ArrowLeft") keyDir = -1;
     if (e.key === "ArrowRight") keyDir = 1;
   });
+  
   window.addEventListener("keyup", (e) => {
     if ((e.key === "ArrowLeft" && keyDir === -1) || (e.key === "ArrowRight" && keyDir === 1)) {
       keyDir = 0;
@@ -130,6 +140,7 @@
     el?.classList.remove("hidden");
     el?.classList.add("active");
   }
+  
   function hide(el) {
     el?.classList.add("hidden");
     el?.classList.remove("active");
@@ -287,6 +298,7 @@
 
   // Кнопки
   btnStart.addEventListener("click", () => {
+    console.log("Start button clicked");
     hide(screenStart);
     hide(screenWin);
     hide(screenLose);
@@ -294,12 +306,14 @@
   });
 
   btnAgainWin.addEventListener("click", () => {
+    console.log("Play again (win) button clicked");
     hide(screenWin);
     hide(screenLose);
     resetGame();
   });
 
   btnAgainLose.addEventListener("click", () => {
+    console.log("Play again (lose) button clicked");
     hide(screenLose);
     resetGame();
   });
@@ -311,7 +325,8 @@
   setHud();
 
   // Для красоты: показать параметр из QR (если нужно)
-  // console.log("startapp:", startParam);
+  console.log("startapp:", startParam);
+  console.log("Game initialized. Test controls in console.");
 
   requestAnimationFrame(loop);
 })();
