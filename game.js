@@ -1,310 +1,317 @@
 (() => {
-  const TARGET_SCORE = 30;
-  const START_LIVES = 2;
+  // Telegram WebApp (если открыто в Telegram)
+  const tg = window.Telegram?.WebApp;
+  try {
+    tg?.ready();
+    tg?.expand();
+  } catch {}
 
-  const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d");
+  // startapp параметр из QR: ...?startapp=yana
+  const startParam =
+    new URLSearchParams(location.search).get("tgWebAppStartParam") ||
+    tg?.initDataUnsafe?.start_param ||
+    "default";
 
-  const startScreen = document.getElementById("startScreen");
-  const winScreen = document.getElementById("winScreen");
-  const loseScreen = document.getElementById("loseScreen");
+  // UI элементы
+  const screenStart = document.getElementById("screen-start");
+  const screenWin = document.getElementById("screen-win");
+  const screenLose = document.getElementById("screen-lose");
 
-  const startBtn = document.getElementById("startBtn");
-  const playAgainBtnWin = document.getElementById("playAgainBtnWin");
-  const playAgainBtnLose = document.getElementById("playAgainBtnLose");
-
-  const closeBtnWin = document.getElementById("closeBtnWin");
-  const closeBtnLose = document.getElementById("closeBtnLose");
-
+  const winText = document.getElementById("win-text");
   const scoreEl = document.getElementById("score");
   const livesEl = document.getElementById("lives");
-  const winText = document.getElementById("winText");
 
-  // Telegram WebApp (если открыли внутри Telegram)
-  const tg = window.Telegram?.WebApp;
-  if (tg) {
-    tg.ready();
-    tg.expand();
-  }
+  const btnStart = document.getElementById("btn-start");
+  const btnAgainWin = document.getElementById("btn-again-win");
+  const btnAgainLose = document.getElementById("btn-again-lose");
+  const btnClose = document.getElementById("btn-close");
+  const btnClose2 = document.getElementById("btn-close-2");
 
-  let W = 0, H = 0, DPR = 1;
+  btnClose.addEventListener("click", () => tg?.close?.());
+  btnClose2.addEventListener("click", () => tg?.close?.());
+
+  // Canvas setup
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d", { alpha: false });
 
   function resize() {
-    DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    W = Math.floor(window.innerWidth);
-    H = Math.floor(window.innerHeight);
-    canvas.width = Math.floor(W * DPR);
-    canvas.height = Math.floor(H * DPR);
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = "100vw";
+    canvas.style.height = "100vh";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener("resize", resize);
   resize();
 
+  // Игровые данные
   const state = {
-    mode: "start", // start | play | win | lose
-    score: 0,
-    lives: START_LIVES,
-    lastTime: 0,
-    spawnTimer: 0,
-    balls: [],
-    pointerX: W / 2,
-    usePointer: false,
     running: false,
+    score: 0,
+    lives: 2,
+    speed: 220, // базовая скорость падения
+    spawnEvery: 900, // мс
+    lastSpawn: 0,
+    lastTs: 0,
+    balls: [],
+    stars: [],
   };
 
-  const santa = {
-    x: W / 2,
-    y: H - 120,
-    r: 34,
-    vx: 0,
-    speed: 0.18,
+  const player = {
+    x: window.innerWidth / 2 - 26,
+    y: window.innerHeight - 120,
+    w: 52,
+    h: 52,
+    speed: 520, // скорость по клаве
   };
 
-  function setMode(mode) {
-    state.mode = mode;
+  // Картинка "Дед Мороз" (emoji)
+  // Для надёжности рисуем текстом
+  const santaEmoji = "🎅";
 
-    startScreen.classList.toggle("hidden", mode !== "start");
-    startScreen.classList.toggle("active", mode === "start");
-
-    winScreen.classList.toggle("hidden", mode !== "win");
-    winScreen.classList.toggle("active", mode === "win");
-
-    loseScreen.classList.toggle("hidden", mode !== "lose");
-    loseScreen.classList.toggle("active", mode === "lose");
+  // --- Управление ---
+  // На телефоне: веди пальцем по экрану влево/вправо (можно просто водить)
+  // На ПК: веди мышкой/тачпадом
+  // Стрелки ◀ ▶ тоже работают
+  function setPlayerX(clientX) {
+    player.x = clientX - player.w / 2;
+    player.x = Math.max(8, Math.min(window.innerWidth - player.w - 8, player.x));
   }
 
-  function resetGame() {
-    state.score = 0;
-    state.lives = START_LIVES;
-    state.balls = [];
-    state.spawnTimer = 0;
-    state.lastTime = performance.now();
+  let activePointerId = null;
+
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      activePointerId = e.pointerId;
+      try {
+        e.target.setPointerCapture?.(e.pointerId);
+      } catch (_) {}
+      setPlayerX(e.clientX);
+      e.preventDefault?.();
+    },
+    { passive: false }
+  );
+
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      // Двигаем даже если просто водишь пальцем/мышкой
+      if (activePointerId === null || e.pointerId === activePointerId) {
+        setPlayerX(e.clientX);
+      }
+      e.preventDefault?.();
+    },
+    { passive: false }
+  );
+
+  window.addEventListener("pointerup", (e) => {
+    if (e.pointerId === activePointerId) activePointerId = null;
+  });
+  window.addEventListener("pointercancel", () => {
+    activePointerId = null;
+  });
+
+  // Клавиатура
+  let keyDir = 0; // -1 left, +1 right
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") keyDir = -1;
+    if (e.key === "ArrowRight") keyDir = 1;
+  });
+  window.addEventListener("keyup", (e) => {
+    if ((e.key === "ArrowLeft" && keyDir === -1) || (e.key === "ArrowRight" && keyDir === 1)) {
+      keyDir = 0;
+    }
+  });
+
+  // --- UI helpers ---
+  function show(el) {
+    el?.classList.remove("hidden");
+    el?.classList.add("active");
+  }
+  function hide(el) {
+    el?.classList.add("hidden");
+    el?.classList.remove("active");
+  }
+
+  function setHud() {
     scoreEl.textContent = String(state.score);
     livesEl.textContent = String(state.lives);
-
-    santa.x = W / 2;
-    santa.y = H - 120;
-    santa.vx = 0;
-
-    state.pointerX = W / 2;
-    state.usePointer = false;
-
-    winText.textContent = "";
   }
 
-  function closeApp() {
-    if (tg) tg.close();
-    else window.close();
-  }
+  // --- Игра ---
+  function resetGame() {
+    state.running = true;
+    state.score = 0;
+    state.lives = 2;
+    state.speed = 220;
+    state.spawnEvery = 900;
+    state.lastSpawn = 0;
+    state.balls = [];
+    setHud();
 
-  function rand(min, max) {
-    return Math.random() * (max - min) + min;
+    // звёзды
+    state.stars = [];
+    for (let i = 0; i < 90; i++) {
+      state.stars.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        r: Math.random() * 2 + 0.4,
+        a: Math.random() * 0.6 + 0.15,
+      });
+    }
+
+    player.x = window.innerWidth / 2 - player.w / 2;
+    player.y = window.innerHeight - 120;
   }
 
   function spawnBall() {
-    const r = rand(12, 18);
-    const x = rand(r + 10, W - r - 10);
-    const y = -r - 10;
-
-    // скорость растёт с очками
-    const base = 190 + state.score * 14; // px/sec
-    const vy = rand(base, base + 90);
-
-    state.balls.push({ x, y, r, vy });
+    const r = 18 + Math.random() * 14;
+    state.balls.push({
+      x: r + Math.random() * (window.innerWidth - 2 * r),
+      y: -r - 10,
+      r,
+      vy: state.speed + Math.random() * 120,
+    });
   }
 
-  function spawnIntervalMs() {
-    // чем больше очков — тем чаще шары
-    // от ~900мс в начале до ~220мс ближе к 30 очкам
-    return Math.max(220, 900 - state.score * 23);
+  function circleRectCollide(c, r) {
+    const closestX = Math.max(r.x, Math.min(c.x, r.x + r.w));
+    const closestY = Math.max(r.y, Math.min(c.y, r.y + r.h));
+    const dx = c.x - closestX;
+    const dy = c.y - closestY;
+    return dx * dx + dy * dy <= c.r * c.r;
   }
 
-  function update(dt) {
-    if (state.mode !== "play") return;
+  function win() {
+    state.running = false;
+    hide(screenStart);
+    hide(screenLose);
+    show(screenWin);
 
-    // Спавн шаров
-    state.spawnTimer += dt * 1000;
-    const interval = spawnIntervalMs();
-    while (state.spawnTimer >= interval) {
-      state.spawnTimer -= interval;
+    winText.textContent =
+      "Yana, с праздником! 🎄✨\n\nТы набрала 30 очков 🥳\nПосмотри под ёлку 😉";
+  }
+
+  function lose() {
+    state.running = false;
+    hide(screenStart);
+    hide(screenWin);
+    show(screenLose);
+  }
+
+  function update(dt, now) {
+    // Движение по клавиатуре (ПК)
+    if (keyDir !== 0) {
+      player.x += keyDir * player.speed * dt;
+      player.x = Math.max(8, Math.min(window.innerWidth - player.w - 8, player.x));
+    }
+
+    // спавн шаров
+    if (now - state.lastSpawn >= state.spawnEvery) {
+      state.lastSpawn = now;
       spawnBall();
     }
 
-    // Управление Санта
-    // Если ведём пальцем/мышкой — двигаемся к pointerX
-    // Иначе стрелками — santa.vx изменяется
-    if (state.usePointer) {
-      const dx = state.pointerX - santa.x;
-      santa.x += dx * Math.min(1, dt * 10);
-    } else {
-      santa.x += santa.vx * dt;
+    // усложнение
+    if (state.score > 0 && state.score % 5 === 0) {
+      state.speed = 220 + state.score * 6;
+      state.spawnEvery = Math.max(420, 900 - state.score * 10);
     }
-    santa.x = Math.max(santa.r + 10, Math.min(W - santa.r - 10, santa.x));
-    santa.y = H - 120;
 
-    // Двигаем шары + коллизии
+    // движение шаров
     for (let i = state.balls.length - 1; i >= 0; i--) {
       const b = state.balls[i];
       b.y += b.vy * dt;
 
-      // Поймал?
-      const dx = b.x - santa.x;
-      const dy = b.y - santa.y;
-      const dist2 = dx * dx + dy * dy;
-      const rr = (b.r + santa.r) * (b.r + santa.r);
-
-      if (dist2 <= rr) {
+      // поймали
+      if (circleRectCollide({ x: b.x, y: b.y, r: b.r }, player)) {
         state.balls.splice(i, 1);
         state.score += 1;
-        scoreEl.textContent = String(state.score);
-
-        if (state.score >= TARGET_SCORE) {
-          winText.textContent =
-            "Yana, с праздником! 🎄✨\n\nТы умница! Посмотри под ёлку 😉";
-          setMode("win");
-        }
+        setHud();
+        if (state.score >= 30) win();
         continue;
       }
 
-      // Пропустил?
-      if (b.y - b.r > H + 10) {
+      // упал вниз
+      if (b.y - b.r > window.innerHeight + 40) {
         state.balls.splice(i, 1);
         state.lives -= 1;
-        livesEl.textContent = String(state.lives);
-
-        if (state.lives <= 0) {
-          setMode("lose");
-        }
+        setHud();
+        if (state.lives <= 0) lose();
       }
     }
   }
 
-  function drawBackground() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#0b1020");
-    g.addColorStop(1, "#071022");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+  function draw() {
+    // фон
+    ctx.fillStyle = "#0b1020";
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-    // лёгкие "звёзды"
-    ctx.globalAlpha = 0.25;
-    for (let i = 0; i < 35; i++) {
-      const x = (i * 97) % W;
-      const y = (i * 53) % H;
+    // звёзды
+    for (const s of state.stars) {
+      ctx.globalAlpha = s.a;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
       ctx.fillStyle = "#fff";
-      ctx.fillRect(x, y, 2, 2);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }
 
-  function drawSanta() {
-    // Санта как emoji
-    ctx.font = "64px system-ui, Apple Color Emoji, Segoe UI Emoji";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("🎅", santa.x, santa.y);
-  }
-
-  function drawBalls() {
+    // шары
     for (const b of state.balls) {
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.closePath();
       ctx.fillStyle = "rgba(255,255,255,0.95)";
       ctx.fill();
-
-      ctx.globalAlpha = 0.25;
-      ctx.beginPath();
-      ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.35, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.globalAlpha = 1;
     }
+
+    // дед мороз (emoji)
+    ctx.font = "52px system-ui, Apple Color Emoji, Segoe UI Emoji";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(santaEmoji, player.x + player.w / 2, player.y + player.h / 2);
   }
 
-  function render() {
-    drawBackground();
+  function loop(ts) {
+    if (!state.lastTs) state.lastTs = ts;
+    const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
+    state.lastTs = ts;
 
-    // В start/win/lose можно не рисовать физику, но красиво — рисуем всё равно
-    drawBalls();
-    drawSanta();
-  }
-
-  function loop(t) {
-    if (!state.running) return;
-
-    const dt = Math.min(0.033, (t - state.lastTime) / 1000);
-    state.lastTime = t;
-
-    update(dt);
-    render();
+    if (state.running) update(dt, ts);
+    draw();
 
     requestAnimationFrame(loop);
   }
 
-  function startGame() {
+  // Кнопки
+  btnStart.addEventListener("click", () => {
+    hide(screenStart);
+    hide(screenWin);
+    hide(screenLose);
     resetGame();
-    setMode("play");
-  }
-
-  function startLoopIfNeeded() {
-    if (state.running) return;
-    state.running = true;
-    state.lastTime = performance.now();
-    requestAnimationFrame(loop);
-  }
-
-  // --- INPUT ---
-  function setPointerFromEvent(e) {
-    const rect = canvas.getBoundingClientRect();
-    state.pointerX = (e.clientX - rect.left);
-    state.usePointer = true;
-  }
-
-  canvas.addEventListener("pointerdown", (e) => {
-    setPointerFromEvent(e);
   });
 
-  canvas.addEventListener("pointermove", (e) => {
-    if (e.pressure === 0 && e.buttons === 0) return;
-    setPointerFromEvent(e);
+  btnAgainWin.addEventListener("click", () => {
+    hide(screenWin);
+    hide(screenLose);
+    resetGame();
   });
 
-  window.addEventListener("keydown", (e) => {
-    if (state.mode !== "play") return;
-
-    if (e.key === "ArrowLeft") santa.vx = -420;
-    if (e.key === "ArrowRight") santa.vx = 420;
+  btnAgainLose.addEventListener("click", () => {
+    hide(screenLose);
+    resetGame();
   });
 
-  window.addEventListener("keyup", (e) => {
-    if (e.key === "ArrowLeft" && santa.vx < 0) santa.vx = 0;
-    if (e.key === "ArrowRight" && santa.vx > 0) santa.vx = 0;
-  });
+  // init
+  hide(screenWin);
+  hide(screenLose);
+  show(screenStart);
+  setHud();
 
-  // --- UI BUTTONS ---
-  startBtn.addEventListener("click", () => {
-    startLoopIfNeeded();
-    startGame();
-  });
+  // Для красоты: показать параметр из QR (если нужно)
+  // console.log("startapp:", startParam);
 
-  playAgainBtnWin.addEventListener("click", () => {
-    startLoopIfNeeded();
-    startGame();
-  });
-
-  playAgainBtnLose.addEventListener("click", () => {
-    startLoopIfNeeded();
-    startGame();
-  });
-
-  closeBtnWin.addEventListener("click", closeApp);
-  closeBtnLose.addEventListener("click", closeApp);
-
-  // Инициализация
-  resetGame();
-  setMode("start");
-  startLoopIfNeeded();
+  requestAnimationFrame(loop);
 })();
