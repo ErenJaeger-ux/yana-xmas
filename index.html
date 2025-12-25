@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>🎄 Новогодняя игра</title>
+
+  <!-- Telegram Mini Apps API -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script> <!-- офиц. скрипт -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="ui">
+    <div id="screen-start" class="screen active">
+      <h1>🎅 Лови шары!</h1>
+      <p id="subtitle">Набери <b>30</b> очков. Жизней: <b>2</b>.</p>
+      <button id="btn-start">Начать игру</button>
+    </div>
+
+    <div id="screen-hud" class="hud hidden">
+      <div>Очки: <span id="score">0</span></div>
+      <div>Жизни: <span id="lives">2</span></div>
+    </div>
+
+    <div id="screen-win" class="screen hidden">
+      <h2>🎄 Яна, с праздником! ✨</h2>
+      <p>Ты набрала 30 очков!</p>
+      <p class="hint"><b>Посмотри под ёлку 😉</b></p>
+      <div class="row">
+        <button id="btn-again-win">Сыграть ещё</button>
+        <button id="btn-close">Закрыть</button>
+      </div>
+    </div>
+
+    <div id="screen-lose" class="screen hidden">
+      <h2>Эх! Шары убежали 😅</h2>
+      <p>Попробуем ещё раз?</p>
+      <div class="row">
+        <button id="btn-again-lose">Ещё раз</button>
+        <button id="btn-close-2">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <script src="./game.js"></script>
+</body>
+</html>
