@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Новогодняя игра</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+  <!-- Фон: снег + базовый фон -->
+  <canvas id="snow"></canvas>
+
+  <!-- Основная игра -->
+  <canvas id="game"></canvas>
+
+  <!-- Победный эффект (конфетти) -->
+  <canvas id="confetti"></canvas>
+
+  <div id="ui">
+    <div class="hud" id="hud">
+      <div>Очки: <span id="score">0</span></div>
+      <div>Жизни: <span id="lives">2</span></div>
+    </div>
+
+    <div class="screen active" id="startScreen">
+      <h1>🎅 Лови шары!</h1>
+      <p class="hint">Набери 30 очков. Жизней: 2.</p>
+      <button id="startBtn" type="button">Начать игру</button>
+      <p class="note">Управление: веди пальцем/мышкой по экрану или стрелками ◀ ▶</p>
+    </div>
+
+    <div class="screen hidden" id="winScreen">
+      <h2>🎄✨ Ура!</h2>
+      <p id="winText"></p>
+      <div class="row">
+        <button id="playAgainBtnWin" type="button">Сыграть ещё</button>
+        <button id="closeBtnWin" type="button">Закрыть</button>
+      </div>
+    </div>
+
+    <div class="screen hidden" id="loseScreen">
+      <h2>Game Over</h2>
+      <p>Шары оказались слишком быстрыми 😅</p>
+      <div class="row">
+        <button id="playAgainBtnLose" type="button">Try Again</button>
+        <button id="closeBtnLose" type="button">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./game.js"></script>
+</body>
+</html>
