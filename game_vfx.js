@@ -52,12 +52,11 @@
       c.style.height = "100vh";
     }
 
-    // Рисуем в CSS-пикселях (как и было), масштабируя контексты
     snowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    initSnow(); // пересоздадим снег под новый размер
+    initSnow();
   }
   window.addEventListener("resize", resizeAll);
   resizeAll();
@@ -259,6 +258,57 @@
     ctx.globalAlpha = 1;
   }
 
+  // --- VFX: Popup "+1" при поимке шара ---
+  const popups = [];
+
+  function spawnPlusOnePopup(x, y) {
+    popups.push({
+      x,
+      y,
+      text: "+1",
+      alpha: 1,
+      vy: -1.5, // двигается вверх
+      life: 60, // кадров жизни
+      fontSize: 22,
+      color: "#FFD700" // золотой цвет
+    });
+  }
+
+  function updatePopups() {
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const p = popups[i];
+      p.y += p.vy;
+      p.vy *= 0.98; // замедление
+      p.life -= 1;
+      p.alpha = Math.max(0, p.life / 60); // плавное исчезновение (без минуса)
+      
+      if (p.life <= 0) {
+        popups.splice(i, 1);
+      }
+    }
+  }
+
+  function drawPopups() {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (const p of popups) {
+    ctx.font = `bold ${p.fontSize}px system-ui, Arial`;
+
+    // тень (сначала)
+    ctx.globalAlpha = p.alpha * 0.45;
+    ctx.fillStyle = "#000";
+    ctx.fillText(p.text, p.x + 1, p.y + 1);
+
+    // основной текст (потом)
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, p.x, p.y);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
   // --- VFX: конфетти на победе ---
   let confettiActive = false;
   const confetti = [];
@@ -317,7 +367,6 @@
 
     confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-    // Сами прямоугольнички белые — на тёмном фоне выглядит празднично.
     confettiCtx.fillStyle = "#fff";
 
     for (const c of confetti) {
@@ -341,9 +390,10 @@
     state.spawnEvery = 900;
     state.lastSpawn = 0;
     state.balls = [];
+    popups.length = 0; // очищаем popup'ы
     setHud();
 
-    stopConfetti(); // на всякий случай
+    stopConfetti();
 
     // звёзды
     state.stars = [];
@@ -427,7 +477,8 @@
       if (circleRectCollide({ x: b.x, y: b.y, r: b.r }, player)) {
         state.balls.splice(i, 1);
         state.score += 1;
-        spawnCatchParticles(b.x, b.y); // ✨ эффект поимки
+        spawnCatchParticles(b.x, b.y); // эффект поимки
+        spawnPlusOnePopup(b.x, b.y - b.r - 10);   // popup "+1" над шаром
         setHud();
         if (state.score >= 30) win();
         continue;
@@ -443,6 +494,7 @@
     }
 
     updateParticles();
+    updatePopups();
   }
 
   function draw() {
@@ -469,6 +521,9 @@
 
     // частицы
     drawParticles();
+    
+    // popup'ы +1
+    drawPopups();
 
     // дед мороз (emoji)
     ctx.font = "52px system-ui, Apple Color Emoji, Segoe UI Emoji";
@@ -522,5 +577,6 @@
   setHud();
 
   console.log("startapp:", startParam);
+  console.log("Game with VFX loaded! Snow, particles, +1 popups, confetti ready!");
   requestAnimationFrame(loop);
 })();
