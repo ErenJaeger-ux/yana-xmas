@@ -1,3 +1,7 @@
+// === sounds (v1.1) ===
+const sounds = {
+  catch: new Audio('sounds/catch.mp3')
+}; // <-- ВОТ ЭТО ОБЯЗАТЕЛЬНО
 (() => {
   // Telegram WebApp (если открыто в Telegram)
   const tg = window.Telegram?.WebApp;
@@ -747,10 +751,14 @@
 
       // поймали
       if (circleRectCollide({ x: b.x, y: b.y, r: b.r }, player)) {
-        state.balls.splice(i, 1);
-        state.score += 1;
-        spawnCatchParticles(b.x, b.y);
-        spawnPlusOnePopup(b.x, b.y - b.r - 10);
+  state.balls.splice(i, 1);
+  state.score += 1;
+
+  sounds.catch.currentTime = 0;
+  sounds.catch.play().catch(() => {});
+
+  spawnCatchParticles(b.x, b.y);
+  spawnPlusOnePopup(b.x, b.y - b.r - 10);
         player.mouth = 1; // открываем рот
         player.mouthFlash = 1; // вспышка
         setHud();
@@ -817,23 +825,34 @@
   }
 
   // Кнопки
-  btnStart.addEventListener("click", () => {
-    hide(screenStart);
-    hide(screenWin);
-    hide(screenLose);
-    resetGame();
-  });
+btnStart.addEventListener("click", () => {
+  // --- unlock sound (v1.1) ---
+  sounds.catch.muted = false;
+  sounds.catch.volume = 1;
+  sounds.catch.currentTime = 0;
 
-  btnAgainWin.addEventListener("click", () => {
-    hide(screenWin);
-    hide(screenLose);
-    resetGame();
-  });
+  sounds.catch.play().then(() => {
+    sounds.catch.pause();
+    sounds.catch.currentTime = 0;
+    sounds.catch.volume = 1;
+  }).catch(() => {});
 
-  btnAgainLose.addEventListener("click", () => {
-    hide(screenLose);
-    resetGame();
-  });
+  hide(screenStart);
+  hide(screenWin);
+  hide(screenLose);
+  resetGame();
+});
+
+btnAgainWin.addEventListener("click", () => {
+  hide(screenWin);
+  hide(screenLose);
+  resetGame();
+});
+
+btnAgainLose.addEventListener("click", () => {
+  hide(screenLose);
+  resetGame();
+});
 
   // init
   hide(screenWin);
