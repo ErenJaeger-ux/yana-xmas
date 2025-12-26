@@ -32,20 +32,239 @@
 
   // --- Canvas setup (3 слоя) ---
   const snowCanvas = document.getElementById("snow");
-  const snowCtx = snowCanvas.getContext("2d", { alpha: false }); // тут рисуем фон + снег
+  const snowCtx = snowCanvas.getContext("2d", { alpha: false });
 
   const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d", { alpha: true }); // важно: прозрачный фон, чтобы видеть снег
+  const ctx = canvas.getContext("2d", { alpha: true });
 
   const confettiCanvas = document.getElementById("confetti");
   const confettiCtx = confettiCanvas.getContext("2d", { alpha: true });
 
-  // --- VFX: снег ---
+  // --- VFX: снег (фон) ---
   const snowflakes = [];
   const SNOW_COUNT = 45;
 
+  // --- VFX: Ёлка (фон) ---
+  const tree = {
+    x: 0,
+    y: 0,
+    w: 220,
+    h: 320,
+    ornaments: [],
+    garlandLights: [], // Массив огоньков гирлянды
+    blinkT: 0,
+  };
+
+  function makeSnowflake(randomY = false) {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return {
+      x: Math.random() * w,
+      y: randomY ? Math.random() * h : -Math.random() * h,
+      r: 1 + Math.random() * 2.5,
+      vy: 0.6 + Math.random() * 1.2,
+      vx: -0.3 + Math.random() * 0.6,
+      drift: Math.random() * Math.PI * 2,
+    };
+  }
+
+  function initSnow() {
+    snowflakes.length = 0;
+    for (let i = 0; i < SNOW_COUNT; i++) snowflakes.push(makeSnowflake(true));
+  }
+
+  function initTree() {
+    // Адаптивный размер ёлки
+    const s = Math.min(window.innerWidth, window.innerHeight);
+    tree.w = Math.max(180, Math.min(260, s * 0.33));
+    tree.h = tree.w * 1.45;
+    
+    tree.x = window.innerWidth / 2;
+    tree.y = window.innerHeight / 2 + 20;
+
+    // Шары на ёлке
+    tree.ornaments = [];
+    const colors = ["#ff3b3b", "#ffd93b", "#3bff7a", "#3bd1ff", "#ff3bda"];
+    for (let i = 0; i < 14; i++) {
+      const t = (i / 13);
+      const layerW = tree.w * (1 - t * 0.65);
+      const ox = (Math.random() - 0.5) * layerW * 0.9;
+      const oy = -tree.h * 0.45 + t * tree.h * 0.9;
+
+      tree.ornaments.push({
+        ox, oy,
+        r: 7 + Math.random() * 4,
+        c: colors[i % colors.length],
+        phase: Math.random() * Math.PI * 2,
+        glowAlpha: 0, // для свечения
+      });
+    }
+
+    // Инициализация гирлянды (бегущие огоньки)
+    tree.garlandLights = [];
+    const lightCount = 12;
+    for (let i = 0; i < lightCount; i++) {
+      tree.garlandLights.push({
+        t: Math.random(), // позиция вдоль гирлянды 0..1
+        speed: 0.03 + Math.random() * 0.04, // скорость движения
+        phase: Math.random() * Math.PI * 2, // фаза мерцания
+        radius: 4 + Math.random() * 2,
+        color: `hsl(${Math.floor(Math.random()*60 + 180)}, 100%, 60%)` // голубоватые оттенки
+      });
+    }
+  }
+
+  function drawStar(ctx2, x, y, rOuter, rInner) {
+    ctx2.beginPath();
+    const spikes = 5;
+    let rot = Math.PI / 2 * 3;
+    const step = Math.PI / spikes;
+
+    ctx2.moveTo(x, y - rOuter);
+    for (let i = 0; i < spikes; i++) {
+      ctx2.lineTo(x + Math.cos(rot) * rOuter, y + Math.sin(rot) * rOuter);
+      rot += step;
+      ctx2.lineTo(x + Math.cos(rot) * rInner, y + Math.sin(rot) * rInner);
+      rot += step;
+    }
+    ctx2.closePath();
+    ctx2.fill();
+  }
+
+  function drawTree(ctx2, tSec) {
+    const x = tree.x;
+    const y = tree.y;
+
+    // ствол
+    ctx2.globalAlpha = 1;
+    ctx2.fillStyle = "#5b3a1f";
+    ctx2.fillRect(x - 18, y + tree.h * 0.38, 36, 55);
+
+    // ярусы ёлки
+    ctx2.fillStyle = "#0b7a3b";
+    for (let i = 0; i < 3; i++) {
+      const k = 1 - i * 0.23;
+      const topY = y - tree.h * 0.5 + i * 80;
+      const w = tree.w * k;
+      const h = 140;
+
+      ctx2.beginPath();
+      ctx2.moveTo(x, topY);
+      ctx2.lineTo(x - w / 2, topY + h);
+      ctx2.lineTo(x + w / 2, topY + h);
+      ctx2.closePath();
+      ctx2.fill();
+    }
+
+    // гирлянда (линия)
+    ctx2.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
+    const startY = y - tree.h * 0.25;
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      const px = x - tree.w * 0.35 + t * (tree.w * 0.7);
+      const py = startY + Math.sin(t * 20 + tSec * 2) * 10 + t * 130;
+      if (i === 0) ctx2.moveTo(px, py);
+      else ctx2.lineTo(px, py);
+    }
+    ctx2.stroke();
+
+    // Огоньки гирлянды (бегущие)
+    for (const light of tree.garlandLights) {
+      light.t += light.speed * 0.01;
+      if (light.t > 1) light.t -= 1;
+
+      const px = x - tree.w * 0.35 + light.t * (tree.w * 0.7);
+      const py = startY + Math.sin(light.t * 20 + tSec * 2) * 10 + light.t * 130;
+
+      // Мерцание
+      const alpha = 0.5 + 0.5 * Math.sin(tSec * 6 + light.phase);
+      ctx2.globalAlpha = alpha;
+      ctx2.fillStyle = light.color;
+      ctx2.beginPath();
+      ctx2.arc(px, py, light.radius, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+    ctx2.globalAlpha = 1;
+
+    // звезда
+    const blink = 0.6 + 0.4 * Math.sin(tSec * 6);
+    ctx2.globalAlpha = blink;
+    ctx2.fillStyle = "#ffd93b";
+    drawStar(ctx2, x, y - tree.h * 0.55, 18, 8);
+    ctx2.globalAlpha = 1;
+
+    // шарики с свечением
+    for (const o of tree.ornaments) {
+      // Обновляем свечение
+      o.glowAlpha = 0.5 + 0.5 * Math.sin(tSec * 4 + o.phase);
+      
+      // Свечение
+      ctx2.globalAlpha = o.glowAlpha * 0.25;
+      ctx2.fillStyle = o.c;
+      ctx2.beginPath();
+      ctx2.arc(x + o.ox, y + o.oy, o.r * 1.8, 0, Math.PI * 2);
+      ctx2.fill();
+      
+      // Основной шар
+      const a = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(tSec * 5 + o.phase));
+      ctx2.globalAlpha = a;
+      ctx2.fillStyle = o.c;
+      ctx2.beginPath();
+      ctx2.arc(x + o.ox, y + o.oy, o.r, 0, Math.PI * 2);
+      ctx2.fill();
+
+      // блик
+      ctx2.globalAlpha = a * 0.8;
+      ctx2.fillStyle = "#fff";
+      ctx2.beginPath();
+      ctx2.arc(x + o.ox - o.r * 0.3, y + o.oy - o.r * 0.3, o.r * 0.35, 0, Math.PI * 2);
+      ctx2.fill();
+
+      ctx2.globalAlpha = 1;
+    }
+  }
+
+  function updateSnow() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    for (const s of snowflakes) {
+      s.drift += 0.02;
+      s.x += s.vx + Math.sin(s.drift) * 0.3;
+      s.y += s.vy;
+
+      if (s.y > h + 10) {
+        s.x = Math.random() * w;
+        s.y = -10;
+      }
+      if (s.x < -20) s.x = w + 20;
+      if (s.x > w + 20) s.x = -20;
+    }
+  }
+
+  function drawSnow() {
+    // фон
+    snowCtx.fillStyle = "#0b1020";
+    snowCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+    // ёлка
+    drawTree(snowCtx, performance.now() / 1000);
+
+    // снежинки фона
+    snowCtx.fillStyle = "#fff";
+    for (const s of snowflakes) {
+      snowCtx.globalAlpha = 0.85;
+      snowCtx.beginPath();
+      snowCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      snowCtx.fill();
+    }
+    snowCtx.globalAlpha = 1;
+  }
+
   function resizeAll() {
-    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    // Исправление: убираем Math.floor для DPR
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
     const w = window.innerWidth;
     const h = window.innerHeight;
 
@@ -61,6 +280,7 @@
     confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     initSnow();
+    initTree();
   }
   window.addEventListener("resize", resizeAll);
   resizeAll();
@@ -70,12 +290,13 @@
     running: false,
     score: 0,
     lives: 2,
-    speed: 220, // базовая скорость падения
-    spawnEvery: 900, // мс
+    speed: 220,
+    spawnEvery: 900,
     lastSpawn: 0,
     lastTs: 0,
     balls: [],
     stars: [],
+    difficultyAt: 0,
   };
 
   const player = {
@@ -83,11 +304,10 @@
     y: window.innerHeight - 120,
     w: 52,
     h: 52,
-    speed: 520, // скорость по клавиатуре
+    speed: 520,
+    mouth: 0,
+    mouthFlash: 0,
   };
-
-  // Картинка "Дед Мороз" (emoji)
-  const santaEmoji = "🎅";
 
   // --- Управление ---
   function setPlayerX(clientX) {
@@ -98,7 +318,6 @@
   let activePointerId = null;
   let mouseDown = false;
 
-  // Для тач-устройств и стилусов
   window.addEventListener("pointerdown", (e) => {
     activePointerId = e.pointerId;
     try {
@@ -109,7 +328,6 @@
   }, { passive: false });
 
   window.addEventListener("pointermove", (e) => {
-    // Двигаем даже если просто водишь пальцем/мышкой
     if (activePointerId === null || e.pointerId === activePointerId) {
       setPlayerX(e.clientX);
     }
@@ -123,7 +341,6 @@
     activePointerId = null;
   });
 
-  // Для мыши на ПК (дополнительно)
   window.addEventListener("mousedown", (e) => {
     mouseDown = true;
     setPlayerX(e.clientX);
@@ -138,7 +355,7 @@
   });
 
   // Клавиатура
-  let keyDir = 0; // -1 left, +1 right
+  let keyDir = 0;
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") keyDir = -1;
     if (e.key === "ArrowRight") keyDir = 1;
@@ -166,59 +383,6 @@
     livesEl.textContent = String(state.lives);
   }
 
-  
-
-  function makeSnowflake(randomY = false) {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    return {
-      x: Math.random() * w,
-      y: randomY ? Math.random() * h : -Math.random() * h,
-      r: 1 + Math.random() * 2.5,
-      vy: 0.6 + Math.random() * 1.2,
-      vx: -0.3 + Math.random() * 0.6,
-      drift: Math.random() * Math.PI * 2,
-    };
-  }
-
-  function initSnow() {
-    snowflakes.length = 0;
-    for (let i = 0; i < SNOW_COUNT; i++) snowflakes.push(makeSnowflake(true));
-  }
-
-  function updateSnow() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    for (const s of snowflakes) {
-      s.drift += 0.02;
-      s.x += s.vx + Math.sin(s.drift) * 0.3;
-      s.y += s.vy;
-
-      if (s.y > h + 10) {
-        s.x = Math.random() * w;
-        s.y = -10;
-      }
-      if (s.x < -20) s.x = w + 20;
-      if (s.x > w + 20) s.x = -20;
-    }
-  }
-
-  function drawSnow() {
-    // фон
-    snowCtx.fillStyle = "#0b1020";
-    snowCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-
-    // снежинки
-    snowCtx.fillStyle = "#fff";
-    for (const s of snowflakes) {
-      snowCtx.globalAlpha = 0.85;
-      snowCtx.beginPath();
-      snowCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      snowCtx.fill();
-    }
-    snowCtx.globalAlpha = 1;
-  }
-
   // --- VFX: частицы при поимке ---
   const particles = [];
 
@@ -236,6 +400,21 @@
         r: 2 + Math.random() * 3,
       });
     }
+
+    // Снеговой след (2–3 частицы, летящие вверх)
+    for (let i = 0; i < 3; i++) {
+      const a = Math.PI + Math.random() * Math.PI * 0.3 - Math.PI * 0.15; // направление вверх с небольшим разбросом
+      const sp = 1 + Math.random() * 2;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: 1,
+        decay: 0.02 + Math.random() * 0.02,
+        r: 1.5 + Math.random() * 2,
+        type: 'snowTrail'
+      });
+    }
   }
 
   function updateParticles() {
@@ -243,7 +422,11 @@
       const p = particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.12;
+      if (p.type === 'snowTrail') {
+        p.vy -= 0.08; // замедление и подъем
+      } else {
+        p.vy += 0.12; // гравитация для обычных частиц
+      }
       p.life -= p.decay;
       if (p.life <= 0) particles.splice(i, 1);
     }
@@ -260,7 +443,7 @@
     ctx.globalAlpha = 1;
   }
 
-  // --- VFX: Popup "+1" при поимке шара ---
+  // --- VFX: Popup "+1" при поимке ---
   const popups = [];
 
   function spawnPlusOnePopup(x, y) {
@@ -269,10 +452,10 @@
       y,
       text: "+1",
       alpha: 1,
-      vy: -1.5, // двигается вверх
-      life: 60, // кадров жизни
+      vy: -1.5,
+      life: 60,
       fontSize: 22,
-      color: "#FFD700" // золотой цвет
+      color: "#FFD700"
     });
   }
 
@@ -280,48 +463,37 @@
     for (let i = popups.length - 1; i >= 0; i--) {
       const p = popups[i];
       p.y += p.vy;
-      p.vy *= 0.98; // замедление
+      p.vy *= 0.98;
       p.life -= 1;
-      p.alpha = Math.max(0, p.life / 60); // плавное исчезновение (без минуса)
-      
-      if (p.life <= 0) {
-        popups.splice(i, 1);
-      }
+      p.alpha = Math.max(0, p.life / 60);
+      if (p.life <= 0) popups.splice(i, 1);
     }
   }
 
   function drawPopups() {
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  for (const p of popups) {
-    ctx.font = `bold ${p.fontSize}px system-ui, Arial`;
-
-    // тень (сначала)
-    ctx.globalAlpha = p.alpha * 0.45;
-    ctx.fillStyle = "#000";
-    ctx.fillText(p.text, p.x + 1, p.y + 1);
-
-    // основной текст (потом)
-    ctx.globalAlpha = p.alpha;
-    ctx.fillStyle = p.color;
-    ctx.fillText(p.text, p.x, p.y);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const p of popups) {
+      ctx.font = `bold ${p.fontSize}px system-ui, Arial`;
+      ctx.globalAlpha = p.alpha * 0.45;
+      ctx.fillStyle = "#000";
+      ctx.fillText(p.text, p.x + 1, p.y + 1);
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
   }
 
-  ctx.globalAlpha = 1;
-}
-
-  // --- VFX: конфетти на победе ---
+  // --- VFX: конфетти ---
   let confettiActive = false;
   const confetti = [];
 
   function startConfetti() {
     confettiActive = true;
     confetti.length = 0;
-
     const w = window.innerWidth;
     const h = window.innerHeight;
-
     const count = 160;
     for (let i = 0; i < count; i++) {
       confetti.push({
@@ -346,10 +518,8 @@
 
   function updateConfetti() {
     if (!confettiActive) return;
-
     const w = window.innerWidth;
     const h = window.innerHeight;
-
     for (let i = confetti.length - 1; i >= 0; i--) {
       const c = confetti[i];
       c.x += c.vx;
@@ -357,20 +527,15 @@
       c.vy += 0.03;
       c.rot += c.vr;
       c.life -= c.decay;
-
       if (c.y > h + 20 || c.life <= 0) confetti.splice(i, 1);
     }
-
     if (confetti.length === 0) stopConfetti();
   }
 
   function drawConfetti() {
     if (!confettiActive) return;
-
     confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
     confettiCtx.fillStyle = "#fff";
-
     for (const c of confetti) {
       confettiCtx.globalAlpha = Math.max(0, c.life);
       confettiCtx.save();
@@ -379,11 +544,105 @@
       confettiCtx.fillRect(-c.r, -c.r * 0.6, c.r * 2, c.r * 1.2);
       confettiCtx.restore();
     }
-
     confettiCtx.globalAlpha = 1;
   }
 
-  // --- Игра ---
+  // --- Игра: снежинки вместо шаров ---
+  function drawSnowflake(ctx2, x, y, r, rot) {
+    ctx2.save();
+    ctx2.translate(x, y);
+    ctx2.rotate(rot);
+    ctx2.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
+    
+    for (let i = 0; i < 6; i++) {
+      ctx2.save();
+      ctx2.rotate(i * Math.PI / 3);
+      ctx2.moveTo(0, 0);
+      ctx2.lineTo(0, -r);
+      ctx2.moveTo(0, -r * 0.55);
+      ctx2.lineTo(r * 0.18, -r * 0.42);
+      ctx2.moveTo(0, -r * 0.55);
+      ctx2.lineTo(-r * 0.18, -r * 0.42);
+      ctx2.restore();
+    }
+    
+    ctx2.stroke();
+    ctx2.restore();
+  }
+
+  // --- Рисование Деда Мороза с анимацией рта ---
+  function drawSanta(ctx2) {
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    ctx2.save();
+    ctx2.translate(cx, cy);
+    const bob = Math.sin(performance.now() / 1000 * 6) * 1.5;
+    ctx2.translate(0, bob);
+
+    // Вспышка при поимке
+    if (player.mouthFlash > 0) {
+      ctx2.globalAlpha = player.mouthFlash * 0.3;
+      ctx2.fillStyle = "#fff";
+      ctx2.beginPath();
+      ctx2.arc(0, 0, 32, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+
+    // лицо
+    ctx2.globalAlpha = 1;
+    ctx2.fillStyle = "#f6d1b1";
+    ctx2.beginPath();
+    ctx2.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx2.fill();
+
+    // борода
+    ctx2.fillStyle = "#fff";
+    ctx2.beginPath();
+    ctx2.arc(0, 10, 24, 0, Math.PI * 2);
+    ctx2.fill();
+
+    // шапка
+    ctx2.fillStyle = "#d81f26";
+    ctx2.beginPath();
+    ctx2.moveTo(-22, -6);
+    ctx2.lineTo(0, -30);
+    ctx2.lineTo(22, -6);
+    ctx2.closePath();
+    ctx2.fill();
+
+    // помпон
+    ctx2.fillStyle = "#fff";
+    ctx2.beginPath();
+    ctx2.arc(0, -30, 6, 0, Math.PI * 2);
+    ctx2.fill();
+
+    // глаза
+    ctx2.fillStyle = "#111";
+    ctx2.beginPath();
+    ctx2.arc(-7, -4, 2.2, 0, Math.PI * 2);
+    ctx2.arc(7, -4, 2.2, 0, Math.PI * 2);
+    ctx2.fill();
+
+    // рот (открывается при поимке)
+    const open = player.mouth;
+    ctx2.strokeStyle = "#a23";
+    ctx2.lineWidth = 2;
+    if (open < 0.2) {
+      ctx2.beginPath();
+      ctx2.moveTo(-6, 6);
+      ctx2.lineTo(6, 6);
+      ctx2.stroke();
+    } else {
+      ctx2.fillStyle = "#611";
+      ctx2.beginPath();
+      ctx2.ellipse(0, 7, 6, 4 + open * 6, 0, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+    ctx2.restore();
+  }
+
   function resetGame() {
     state.running = true;
     state.score = 0;
@@ -392,9 +651,12 @@
     state.spawnEvery = 900;
     state.lastSpawn = 0;
     state.balls = [];
-    popups.length = 0; // очищаем popup'ы
+    state.difficultyAt = 0;
+    popups.length = 0;
+    particles.length = 0;
+    player.mouth = 0;
+    player.mouthFlash = 0;
     setHud();
-
     stopConfetti();
 
     // звёзды
@@ -419,6 +681,8 @@
       y: -r - 10,
       r,
       vy: state.speed + Math.random() * 120,
+      rot: Math.random() * Math.PI * 2,
+      vr: (-2 + Math.random() * 4) * 0.8,
     });
   }
 
@@ -435,9 +699,7 @@
     hide(screenStart);
     hide(screenLose);
     show(screenWin);
-
     startConfetti();
-
     winText.textContent =
       "Yana, с праздником! 🎄✨\n\nТы набрала 30 очков 🥳\nПосмотри под ёлку 😉";
   }
@@ -447,40 +709,47 @@
     hide(screenStart);
     hide(screenWin);
     show(screenLose);
-
     stopConfetti();
   }
 
   function update(dt, now) {
-    // Движение по клавиатуре (ПК)
+    // анимация рта
+    player.mouth = Math.max(0, player.mouth - dt * 6);
+    player.mouthFlash = Math.max(0, player.mouthFlash - dt * 8);
+
+    // движение по клавиатуре
     if (keyDir !== 0) {
       player.x += keyDir * player.speed * dt;
       player.x = Math.max(8, Math.min(window.innerWidth - player.w - 8, player.x));
     }
 
-    // спавн шаров
+    // спавн снежинок
     if (now - state.lastSpawn >= state.spawnEvery) {
       state.lastSpawn = now;
       spawnBall();
     }
 
-    // усложнение
-    if (state.score > 0 && state.score % 5 === 0) {
+    // усложнение (РАЗОВО на каждом пороге)
+    if (state.score > 0 && state.score % 5 === 0 && state.score !== state.difficultyAt) {
+      state.difficultyAt = state.score;
       state.speed = 220 + state.score * 6;
       state.spawnEvery = Math.max(420, 900 - state.score * 10);
     }
 
-    // движение шаров
+    // движение снежинок
     for (let i = state.balls.length - 1; i >= 0; i--) {
       const b = state.balls[i];
       b.y += b.vy * dt;
+      b.rot += b.vr * dt;
 
       // поймали
       if (circleRectCollide({ x: b.x, y: b.y, r: b.r }, player)) {
         state.balls.splice(i, 1);
         state.score += 1;
-        spawnCatchParticles(b.x, b.y); // эффект поимки
-        spawnPlusOnePopup(b.x, b.y - b.r - 10);   // popup "+1" над шаром
+        spawnCatchParticles(b.x, b.y);
+        spawnPlusOnePopup(b.x, b.y - b.r - 10);
+        player.mouth = 1; // открываем рот
+        player.mouthFlash = 1; // вспышка
         setHud();
         if (state.score >= 30) win();
         continue;
@@ -500,10 +769,9 @@
   }
 
   function draw() {
-    // главный canvas теперь прозрачный — чистим его
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-    // звёзды (поверх снега)
+    // звёзды
     ctx.fillStyle = "#fff";
     for (const s of state.stars) {
       ctx.globalAlpha = s.a;
@@ -513,26 +781,19 @@
     }
     ctx.globalAlpha = 1;
 
-    // шары
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    // снежинки (игровые)
     for (const b of state.balls) {
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawSnowflake(ctx, b.x, b.y, b.r, b.rot);
     }
 
     // частицы
     drawParticles();
-    
+
     // popup'ы +1
     drawPopups();
 
-    // дед мороз (emoji)
-    ctx.font = "52px system-ui, Apple Color Emoji, Segoe UI Emoji";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#fff";
-    ctx.fillText(santaEmoji, player.x + player.w / 2, player.y + player.h / 2);
+    // дед мороз
+    drawSanta(ctx);
   }
 
   function loop(ts) {
@@ -540,7 +801,6 @@
     const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
     state.lastTs = ts;
 
-    // фоновые эффекты идут всегда
     updateSnow();
     drawSnow();
 
@@ -579,6 +839,6 @@
   setHud();
 
   console.log("startapp:", startParam);
-  console.log("Game with VFX loaded! Snow, particles, +1 popups, confetti ready!");
+  console.log("New Year Game with improvements: fractional DPR, snow trails, garland lights!");
   requestAnimationFrame(loop);
 })();
