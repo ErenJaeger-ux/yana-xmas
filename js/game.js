@@ -40,6 +40,10 @@
   const confettiCanvas = document.getElementById("confetti");
   const confettiCtx = confettiCanvas.getContext("2d", { alpha: true });
 
+  // --- VFX: снег ---
+  const snowflakes = [];
+  const SNOW_COUNT = 45;
+
   function resizeAll() {
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
     const w = window.innerWidth;
@@ -162,9 +166,7 @@
     livesEl.textContent = String(state.lives);
   }
 
-  // --- VFX: снег ---
-  const snowflakes = [];
-  const SNOW_COUNT = 45;
+  
 
   function makeSnowflake(randomY = false) {
     const w = window.innerWidth;
