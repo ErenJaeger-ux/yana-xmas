@@ -694,14 +694,17 @@
     return dx * dx + dy * dy <= c.r * c.r;
   }
 
-  function win() {
-    state.running = false;
-    hide(screenStart);
-    hide(screenLose);
-    show(screenWin);
-    startConfetti();
-    winText.textContent =
-      "Yana, с праздником! 🎄✨\n\nТы набрала 30 очков 🥳\nПосмотри под ёлку 😉";
+  function win() { 
+  state.running = false; 
+  hide(screenStart); 
+  hide(screenLose); 
+  show(screenWin); 
+  startConfetti(); 
+  
+  winText.innerHTML = 
+    "<div style='font-size: 28px; margin-bottom: 15px; color: #FFD700;'>🎄✨ Яночка, с наступающим Новым Годом! ✨🎄</div>" + 
+    "<div style='font-size: 22px; margin: 15px 0;'>Ты набрала 30 очков 🥳</div>" + 
+    "<div style='font-size: 24px; margin-top: 20px; color: #4ae0ff; font-weight: bold; text-align: center; animation: pulse 1.5s infinite;'>Бегом смотреть что дед мороз оставил у ёлки! 😉</div>";
   }
 
   function lose() {
