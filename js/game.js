@@ -1,22 +1,96 @@
-// === sounds (v1.1) ===
+// === sounds (v1.1-sound) ===
 const sounds = {
-  catch: new Audio('sounds/catch.mp3')
-}; // <-- ВОТ ЭТО ОБЯЗАТЕЛЬНО
+  catch: new Audio("sounds/catch.mp3"),
+  miss:  new Audio("sounds/miss.mp3"),
+  win:   new Audio("sounds/win.mp3"),
+  lose:  new Audio("sounds/lose.mp3"),
+  music: new Audio("sounds/jingle.mp3"),
+};
+
+// Настраиваем музыку по умолчанию
+sounds.music.loop = true;
+sounds.music.volume = 0.25;
+
+// SFX helper
+function playSfx(name, vol = 1) {
+  const a = sounds[name];
+  if (!a) return;
+  a.volume = vol;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
+
+function stopSfx(name) {
+  const a = sounds[name];
+  if (!a) return;
+  a.pause();
+  a.currentTime = 0;
+}
+
+// Music helpers
+function startMusic() {
+  const m = sounds.music;
+  if (!m) return;
+  m.muted = false;
+  // не сбрасываем currentTime каждый раз — иначе может не стартовать/щёлкать
+  const p = m.play();
+  if (p) p.catch(() => {});
+}
+
+function stopMusic() {
+  const m = sounds.music;
+  if (!m) return;
+  m.pause();
+  m.currentTime = 0;
+}
+
+// Unlock audio on first user click/tap
+let audioUnlocked = false;
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+
+  // Разблокировка аудио по первому клику (без реального звука)
+  Object.values(sounds).forEach((a) => {
+    if (!a) return;
+    const prevVol = a.volume;
+    try {
+      a.muted = false;
+      a.volume = 0;
+      a.currentTime = 0;
+      const p = a.play();
+      if (p) {
+        p.then(() => {
+          a.pause();
+          a.currentTime = 0;
+          a.volume = prevVol;
+        }).catch(() => {
+          a.volume = prevVol;
+        });
+      } else {
+        a.volume = prevVol;
+      }
+    } catch (_) {
+      a.volume = prevVol;
+    }
+  });
+}
+
 (() => {
-  // Telegram WebApp (если открыто в Telegram)
+  // Telegram WebApp
   const tg = window.Telegram?.WebApp;
   try {
     tg?.ready();
     tg?.expand();
   } catch {}
 
-  // startapp параметр из QR: ...?startapp=yana
   const startParam =
     new URLSearchParams(location.search).get("tgWebAppStartParam") ||
     tg?.initDataUnsafe?.start_param ||
     "default";
 
-  // UI элементы (используем ID из index.html)
+  // UI элементы
   const screenStart = document.getElementById("startScreen");
   const screenWin = document.getElementById("winScreen");
   const screenLose = document.getElementById("loseScreen");
@@ -34,7 +108,7 @@ const sounds = {
   btnClose.addEventListener("click", () => tg?.close?.());
   btnClose2.addEventListener("click", () => tg?.close?.());
 
-  // --- Canvas setup (3 слоя) ---
+  // --- Canvas setup ---
   const snowCanvas = document.getElementById("snow");
   const snowCtx = snowCanvas.getContext("2d", { alpha: false });
 
@@ -55,7 +129,7 @@ const sounds = {
     w: 220,
     h: 320,
     ornaments: [],
-    garlandLights: [], // Массив огоньков гирлянды
+    garlandLights: [],
     blinkT: 0,
   };
 
@@ -78,7 +152,6 @@ const sounds = {
   }
 
   function initTree() {
-    // Адаптивный размер ёлки
     const s = Math.min(window.innerWidth, window.innerHeight);
     tree.w = Math.max(180, Math.min(260, s * 0.33));
     tree.h = tree.w * 1.45;
@@ -86,7 +159,6 @@ const sounds = {
     tree.x = window.innerWidth / 2;
     tree.y = window.innerHeight / 2 + 20;
 
-    // Шары на ёлке
     tree.ornaments = [];
     const colors = ["#ff3b3b", "#ffd93b", "#3bff7a", "#3bd1ff", "#ff3bda"];
     for (let i = 0; i < 14; i++) {
@@ -100,20 +172,19 @@ const sounds = {
         r: 7 + Math.random() * 4,
         c: colors[i % colors.length],
         phase: Math.random() * Math.PI * 2,
-        glowAlpha: 0, // для свечения
+        glowAlpha: 0,
       });
     }
 
-    // Инициализация гирлянды (бегущие огоньки)
     tree.garlandLights = [];
     const lightCount = 12;
     for (let i = 0; i < lightCount; i++) {
       tree.garlandLights.push({
-        t: Math.random(), // позиция вдоль гирлянды 0..1
-        speed: 0.03 + Math.random() * 0.04, // скорость движения
-        phase: Math.random() * Math.PI * 2, // фаза мерцания
+        t: Math.random(),
+        speed: 0.03 + Math.random() * 0.04,
+        phase: Math.random() * Math.PI * 2,
         radius: 4 + Math.random() * 2,
-        color: `hsl(${Math.floor(Math.random()*60 + 180)}, 100%, 60%)` // голубоватые оттенки
+        color: `hsl(${Math.floor(Math.random()*60 + 180)}, 100%, 60%)`
       });
     }
   }
@@ -139,12 +210,10 @@ const sounds = {
     const x = tree.x;
     const y = tree.y;
 
-    // ствол
     ctx2.globalAlpha = 1;
     ctx2.fillStyle = "#5b3a1f";
     ctx2.fillRect(x - 18, y + tree.h * 0.38, 36, 55);
 
-    // ярусы ёлки
     ctx2.fillStyle = "#0b7a3b";
     for (let i = 0; i < 3; i++) {
       const k = 1 - i * 0.23;
@@ -160,7 +229,6 @@ const sounds = {
       ctx2.fill();
     }
 
-    // гирлянда (линия)
     ctx2.strokeStyle = "rgba(255,255,255,0.35)";
     ctx2.lineWidth = 2;
     ctx2.beginPath();
@@ -174,7 +242,6 @@ const sounds = {
     }
     ctx2.stroke();
 
-    // Огоньки гирлянды (бегущие)
     for (const light of tree.garlandLights) {
       light.t += light.speed * 0.01;
       if (light.t > 1) light.t -= 1;
@@ -182,7 +249,6 @@ const sounds = {
       const px = x - tree.w * 0.35 + light.t * (tree.w * 0.7);
       const py = startY + Math.sin(light.t * 20 + tSec * 2) * 10 + light.t * 130;
 
-      // Мерцание
       const alpha = 0.5 + 0.5 * Math.sin(tSec * 6 + light.phase);
       ctx2.globalAlpha = alpha;
       ctx2.fillStyle = light.color;
@@ -192,26 +258,21 @@ const sounds = {
     }
     ctx2.globalAlpha = 1;
 
-    // звезда
     const blink = 0.6 + 0.4 * Math.sin(tSec * 6);
     ctx2.globalAlpha = blink;
     ctx2.fillStyle = "#ffd93b";
     drawStar(ctx2, x, y - tree.h * 0.55, 18, 8);
     ctx2.globalAlpha = 1;
 
-    // шарики с свечением
     for (const o of tree.ornaments) {
-      // Обновляем свечение
       o.glowAlpha = 0.5 + 0.5 * Math.sin(tSec * 4 + o.phase);
       
-      // Свечение
       ctx2.globalAlpha = o.glowAlpha * 0.25;
       ctx2.fillStyle = o.c;
       ctx2.beginPath();
       ctx2.arc(x + o.ox, y + o.oy, o.r * 1.8, 0, Math.PI * 2);
       ctx2.fill();
       
-      // Основной шар
       const a = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(tSec * 5 + o.phase));
       ctx2.globalAlpha = a;
       ctx2.fillStyle = o.c;
@@ -219,7 +280,6 @@ const sounds = {
       ctx2.arc(x + o.ox, y + o.oy, o.r, 0, Math.PI * 2);
       ctx2.fill();
 
-      // блик
       ctx2.globalAlpha = a * 0.8;
       ctx2.fillStyle = "#fff";
       ctx2.beginPath();
@@ -248,14 +308,11 @@ const sounds = {
   }
 
   function drawSnow() {
-    // фон
     snowCtx.fillStyle = "#0b1020";
     snowCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-    // ёлка
     drawTree(snowCtx, performance.now() / 1000);
 
-    // снежинки фона
     snowCtx.fillStyle = "#fff";
     for (const s of snowflakes) {
       snowCtx.globalAlpha = 0.85;
@@ -267,7 +324,6 @@ const sounds = {
   }
 
   function resizeAll() {
-    // Исправление: убираем Math.floor для DPR
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -358,7 +414,6 @@ const sounds = {
     mouseDown = false;
   });
 
-  // Клавиатура
   let keyDir = 0;
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") keyDir = -1;
@@ -385,6 +440,7 @@ const sounds = {
   function setHud() {
     scoreEl.textContent = String(state.score);
     livesEl.textContent = String(state.lives);
+    // УБРАЛИ: sounds.lose.currentTime = 0; sounds.lose.play().catch(() => {});
   }
 
   // --- VFX: частицы при поимке ---
@@ -405,9 +461,8 @@ const sounds = {
       });
     }
 
-    // Снеговой след (2–3 частицы, летящие вверх)
     for (let i = 0; i < 3; i++) {
-      const a = Math.PI + Math.random() * Math.PI * 0.3 - Math.PI * 0.15; // направление вверх с небольшим разбросом
+      const a = Math.PI + Math.random() * Math.PI * 0.3 - Math.PI * 0.15;
       const sp = 1 + Math.random() * 2;
       particles.push({
         x, y,
@@ -427,9 +482,9 @@ const sounds = {
       p.x += p.vx;
       p.y += p.vy;
       if (p.type === 'snowTrail') {
-        p.vy -= 0.08; // замедление и подъем
+        p.vy -= 0.08;
       } else {
-        p.vy += 0.12; // гравитация для обычных частиц
+        p.vy += 0.12;
       }
       p.life -= p.decay;
       if (p.life <= 0) particles.splice(i, 1);
@@ -576,7 +631,7 @@ const sounds = {
     ctx2.restore();
   }
 
-  // --- Рисование Деда Мороза с анимацией рта ---
+  // --- Рисование Деда Мороза ---
   function drawSanta(ctx2) {
     const cx = player.x + player.w / 2;
     const cy = player.y + player.h / 2;
@@ -585,7 +640,6 @@ const sounds = {
     const bob = Math.sin(performance.now() / 1000 * 6) * 1.5;
     ctx2.translate(0, bob);
 
-    // Вспышка при поимке
     if (player.mouthFlash > 0) {
       ctx2.globalAlpha = player.mouthFlash * 0.3;
       ctx2.fillStyle = "#fff";
@@ -594,20 +648,17 @@ const sounds = {
       ctx2.fill();
     }
 
-    // лицо
     ctx2.globalAlpha = 1;
     ctx2.fillStyle = "#f6d1b1";
     ctx2.beginPath();
     ctx2.arc(0, 0, 22, 0, Math.PI * 2);
     ctx2.fill();
 
-    // борода
     ctx2.fillStyle = "#fff";
     ctx2.beginPath();
     ctx2.arc(0, 10, 24, 0, Math.PI * 2);
     ctx2.fill();
 
-    // шапка
     ctx2.fillStyle = "#d81f26";
     ctx2.beginPath();
     ctx2.moveTo(-22, -6);
@@ -616,20 +667,17 @@ const sounds = {
     ctx2.closePath();
     ctx2.fill();
 
-    // помпон
     ctx2.fillStyle = "#fff";
     ctx2.beginPath();
     ctx2.arc(0, -30, 6, 0, Math.PI * 2);
     ctx2.fill();
 
-    // глаза
     ctx2.fillStyle = "#111";
     ctx2.beginPath();
     ctx2.arc(-7, -4, 2.2, 0, Math.PI * 2);
     ctx2.arc(7, -4, 2.2, 0, Math.PI * 2);
     ctx2.fill();
 
-    // рот (открывается при поимке)
     const open = player.mouth;
     ctx2.strokeStyle = "#a23";
     ctx2.lineWidth = 2;
@@ -663,7 +711,6 @@ const sounds = {
     setHud();
     stopConfetti();
 
-    // звёзды
     state.stars = [];
     for (let i = 0; i < 90; i++) {
       state.stars.push({
@@ -699,19 +746,25 @@ const sounds = {
   }
 
   function win() { 
-  state.running = false; 
-  hide(screenStart); 
-  hide(screenLose); 
-  show(screenWin); 
-  startConfetti(); 
-  
-  winText.innerHTML = 
-    "<div style='font-size: 28px; margin-bottom: 15px; color: #FFD700;'>🎄✨ Яночка, с наступающим Новым Годом! ✨🎄</div>" + 
-    "<div style='font-size: 22px; margin: 15px 0;'>Ты набрала 30 очков 🥳</div>" + 
-    "<div style='font-size: 24px; margin-top: 20px; color: #4ae0ff; font-weight: bold; text-align: center; animation: pulse 1.5s infinite;'>Бегом смотреть что дед мороз оставил у ёлки! 😉</div>";
+    stopMusic();
+    stopSfx('miss');
+    playSfx('win');
+    state.running = false; 
+    hide(screenStart); 
+    hide(screenLose); 
+    show(screenWin); 
+    startConfetti(); 
+    
+    winText.innerHTML = 
+      "<div style='font-size: 28px; margin-bottom: 15px; color: #FFD700;'>🎄✨ Яночка, с наступающим Новым Годом! ✨🎄</div>" + 
+      "<div style='font-size: 22px; margin: 15px 0;'>Ты набрала 30 очков 🥳</div>" + 
+      "<div style='font-size: 24px; margin-top: 20px; color: #4ae0ff; font-weight: bold; text-align: center; animation: pulse 1.5s infinite;'>Бегом смотреть что дед мороз оставил у ёлки! 😉</div>";
   }
 
   function lose() {
+    stopMusic();
+    stopSfx('miss');
+    playSfx('lose');
     state.running = false;
     hide(screenStart);
     hide(screenWin);
@@ -720,23 +773,19 @@ const sounds = {
   }
 
   function update(dt, now) {
-    // анимация рта
     player.mouth = Math.max(0, player.mouth - dt * 6);
     player.mouthFlash = Math.max(0, player.mouthFlash - dt * 8);
 
-    // движение по клавиатуре
     if (keyDir !== 0) {
       player.x += keyDir * player.speed * dt;
       player.x = Math.max(8, Math.min(window.innerWidth - player.w - 8, player.x));
     }
 
-    // спавн снежинок
     if (now - state.lastSpawn >= state.spawnEvery) {
       state.lastSpawn = now;
       spawnBall();
     }
 
-    // усложнение (РАЗОВО на каждом пороге)
     if (state.score > 0 && state.score % 5 === 0 && state.score !== state.difficultyAt) {
       state.difficultyAt = state.score;
       state.speed = 220 + state.score * 6;
@@ -751,16 +800,15 @@ const sounds = {
 
       // поймали
       if (circleRectCollide({ x: b.x, y: b.y, r: b.r }, player)) {
-  state.balls.splice(i, 1);
-  state.score += 1;
+        state.balls.splice(i, 1);
+        state.score += 1;
 
-  sounds.catch.currentTime = 0;
-  sounds.catch.play().catch(() => {});
+        playSfx('catch');
 
-  spawnCatchParticles(b.x, b.y);
-  spawnPlusOnePopup(b.x, b.y - b.r - 10);
-        player.mouth = 1; // открываем рот
-        player.mouthFlash = 1; // вспышка
+        spawnCatchParticles(b.x, b.y);
+        spawnPlusOnePopup(b.x, b.y - b.r - 10);
+        player.mouth = 1;
+        player.mouthFlash = 1;
         setHud();
         if (state.score >= 30) win();
         continue;
@@ -770,8 +818,12 @@ const sounds = {
       if (b.y - b.r > window.innerHeight + 40) {
         state.balls.splice(i, 1);
         state.lives -= 1;
+
+        const willLose = state.lives <= 0;
+        if (!willLose) playSfx('miss', 0.7);
+
         setHud();
-        if (state.lives <= 0) lose();
+        if (willLose) lose();
       }
     }
 
@@ -782,7 +834,6 @@ const sounds = {
   function draw() {
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-    // звёзды
     ctx.fillStyle = "#fff";
     for (const s of state.stars) {
       ctx.globalAlpha = s.a;
@@ -792,18 +843,12 @@ const sounds = {
     }
     ctx.globalAlpha = 1;
 
-    // снежинки (игровые)
     for (const b of state.balls) {
       drawSnowflake(ctx, b.x, b.y, b.r, b.rot);
     }
 
-    // частицы
     drawParticles();
-
-    // popup'ы +1
     drawPopups();
-
-    // дед мороз
     drawSanta(ctx);
   }
 
@@ -825,34 +870,32 @@ const sounds = {
   }
 
   // Кнопки
-btnStart.addEventListener("click", () => {
-  // --- unlock sound (v1.1) ---
-  sounds.catch.muted = false;
-  sounds.catch.volume = 1;
-  sounds.catch.currentTime = 0;
+  btnStart.addEventListener("click", () => {
+    unlockAudio();
+    startMusic();
 
-  sounds.catch.play().then(() => {
-    sounds.catch.pause();
-    sounds.catch.currentTime = 0;
-    sounds.catch.volume = 1;
-  }).catch(() => {});
+    hide(screenStart);
+    hide(screenWin);
+    hide(screenLose);
+    resetGame();
+  });
 
-  hide(screenStart);
-  hide(screenWin);
-  hide(screenLose);
-  resetGame();
-});
+  btnAgainWin.addEventListener("click", () => {
+    unlockAudio();
+    startMusic();
 
-btnAgainWin.addEventListener("click", () => {
-  hide(screenWin);
-  hide(screenLose);
-  resetGame();
-});
+    hide(screenWin);
+    hide(screenLose);
+    resetGame();
+  });
 
-btnAgainLose.addEventListener("click", () => {
-  hide(screenLose);
-  resetGame();
-});
+  btnAgainLose.addEventListener("click", () => {
+    unlockAudio();
+    startMusic();
+
+    hide(screenLose);
+    resetGame();
+  });
 
   // init
   hide(screenWin);
@@ -861,6 +904,6 @@ btnAgainLose.addEventListener("click", () => {
   setHud();
 
   console.log("startapp:", startParam);
-  console.log("New Year Game with improvements: fractional DPR, snow trails, garland lights!");
+  console.log("New Year Game with sound fixes!");
   requestAnimationFrame(loop);
 })();
